@@ -71,13 +71,19 @@ func (a *App) handleEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conclusion := "success"
+	var totalSuccess, totalFailure int
 	for _, s := range summary.Suites {
+		totalSuccess += s.Success
+		totalFailure += s.Failure
 		if s.Failure > 0 {
 			conclusion = "failure"
-			break
 		}
 	}
+
 	subject := fmt.Sprintf("K8s Integration Test Results — Run #%d (%s)", req.RunID, conclusion)
+	if conclusion == "failure" {
+		subject = fmt.Sprintf("K8s Integration Test Results — Run #%d (%s, %d passed / %d failed)", req.RunID, conclusion, totalSuccess, totalFailure)
+	}
 	msg := buildMIMEMessage(a.email.FromAddress, a.email.ToAddresses, subject, body.String())
 
 	addr := fmt.Sprintf("%s:%s", a.email.SMTPRelay, a.email.SMTPPort)
