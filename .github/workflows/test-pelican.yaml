@@ -38,6 +38,6 @@ jobs:
       setupScript: | 
         VERSION="${{ matrix.clientVersion }}"
         VERSION="${VERSION#v}"
-        DEB_VERSION=pelican_$(echo "$VERSION" | sed 's/-rc/.rc/')-1_amd64.deb
-        wget -O pelican.deb "https://dl.pelicanplatform.org/${VERSION}/${DEB_VERSION}"
-        sudo dpkg -i pelican.deb
+        wget -O pelican.tgz "https://dl.pelicanplatform.org/${VERSION}/pelican-server_Linux_x86_64.tar.gz"
+        tar xf pelican.tgz
+        mv "pelican-server-$VERSION/pelican-server" /usr/bin/pelican
