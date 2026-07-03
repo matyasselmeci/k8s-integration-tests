@@ -40,4 +40,4 @@ jobs:
         VERSION="${VERSION#v}"
         wget -O pelican.tgz "https://dl.pelicanplatform.org/${VERSION}/pelican-server_Linux_x86_64.tar.gz"
         tar xf pelican.tgz
-        mv "pelican-server-$VERSION/pelican-server" /usr/bin/pelican
+        sudo mv "pelican-server-$VERSION/pelican-server" /usr/bin/pelican
