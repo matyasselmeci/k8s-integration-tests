@@ -118,6 +118,8 @@ spec:
             # Origin data storage (PVC)
             - name: origin-data
               mountPath: /data
+            - name: origin-data-public
+              mountPath: /data/public
       volumes:
         - name: wait-for-url
           configMap:
@@ -144,5 +146,7 @@ spec:
           secret:
             secretName: origin-issuer-key
         - name: origin-data
-          hostPath: 
+          hostPath:
             path: /data
+        - name: origin-data-public
+          emptyDir: {}
