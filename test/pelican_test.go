@@ -10,6 +10,7 @@ import (
 
 	"github.com/gruntwork-io/terratest/modules/k8s"
 	"github.com/gruntwork-io/terratest/modules/random"
+	// "github.com/gruntwork-io/terratest/modules/test_structure"
 )
 
 type pelicanFormatArgs struct {
@@ -130,7 +131,7 @@ func startPelicanServices(tc *PelicanTestContext) {
 
 func cleanupPelicanTestSpace(setup *PelicanTestContext) {
 	setup.dumpPodInformation(setup.logDir)
-	noCleanup := os.Getenv("TEST_PELICAN_NO_CLEANUP") // TODO replace with test stages (https://terratest.gruntwork.io/docs/testing-best-practices/iterating-locally-using-test-stages/)
+	noCleanup := os.Getenv("TEST_PELICAN_NO_CLEANUP") // TODO replace with test stages (https://terratest.gruntwork.io/docs/testing-best-practices/iterating-locally-using-test-stages/, https://pkg.go.dev/github.com/gruntwork-io/terratest@v0.56.0/modules/test-structure)
 	if strings.ToLower(strings.TrimSpace(noCleanup)) == "true" {
 		setup.T.Logf("TEST_PELICAN_NO_CLEANUP is set, skipping cleanup of test resources.")
 	} else {
