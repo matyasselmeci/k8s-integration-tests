@@ -120,6 +120,9 @@ spec:
               mountPath: /data
             - name: origin-data-public
               mountPath: /data/public
+            - name: origin-test-scripts
+              mountPath: /data/scripts
+              readOnly: true
       volumes:
         - name: wait-for-url
           configMap:
@@ -150,3 +153,6 @@ spec:
             path: /data
         - name: origin-data-public
           emptyDir: {}
+        - name: origin-test-scripts
+          configMap:
+            name: origin-test-scripts
