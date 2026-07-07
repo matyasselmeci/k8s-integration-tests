@@ -120,11 +120,16 @@ func startPelicanServices(tc *PelicanTestContext) {
 
 func cleanupPelicanTestSpace(setup *PelicanTestContext) {
 	setup.dumpPodInformation(setup.logDir)
-	setup.deletePelicanSecrets(setup.secretsManifest)
-	k8s.KubectlDeleteFromKustomize(setup.T, setup.kubectlOptions, setup.formattedKustomizeDir)
-	k8s.DeleteNamespace(setup.T, setup.kubectlOptions, setup.namespace)
+	noCleanup := os.Getenv("TEST_PELICAN_NO_CLEANUP") // TODO replace with test stages (https://terratest.gruntwork.io/docs/testing-best-practices/iterating-locally-using-test-stages/)
+	if strings.ToLower(strings.TrimSpace(noCleanup)) == "true" {
+		setup.T.Logf("TEST_PELICAN_NO_CLEANUP is set, skipping cleanup of test resources.")
+	} else {
+		setup.deletePelicanSecrets(setup.secretsManifest)
+		k8s.KubectlDeleteFromKustomize(setup.T, setup.kubectlOptions, setup.formattedKustomizeDir)
+		k8s.DeleteNamespace(setup.T, setup.kubectlOptions, setup.namespace)
+		os.RemoveAll(setup.formattedKustomizeDir)
+	}
 	setup.cancelCtx()
-	os.RemoveAll(setup.formattedKustomizeDir)
 }
 
 func TestPelican(t *testing.T) {
