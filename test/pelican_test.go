@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"text/template"
+	"time"
 
 	"github.com/gruntwork-io/terratest/modules/k8s"
 	"github.com/gruntwork-io/terratest/modules/random"
@@ -38,6 +40,11 @@ func pelicanOrgForTag(tag string) string {
 	}
 	return "pelican_platform"
 }
+
+// waitInitialDelay is the amount of time to wait for a deployment to become
+// ready before polling it.  Needed because the readiness probes have an initial delay.
+// The value is the sum of initialDelaySeconds + timeoutSeconds of the readiness tests.
+var waitInitialDelay time.Duration = 35 * time.Second
 
 // PelicanTestContext holds all setup components needed to run the Pelican tests, and provides a convenient way to pass them around
 type PelicanTestContext struct {
@@ -95,7 +102,7 @@ func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 	formattedKustomizeDir := th.formatKustomizeDir(kustomizeDir, defaultPelicanFormatArgs, funcMap)
 	k8s.KubectlApplyFromKustomize(t, options, formattedKustomizeDir)
 
-	return &PelicanTestContext{
+	testContext := &PelicanTestContext{
 		TestHandle:            th,
 		logDir:                logDir,
 		cancelCtx:             cancelCtx,
@@ -104,6 +111,29 @@ func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 		namespace:             namespace,
 		kubectlOptions:        options,
 	}
+
+	return testContext
+}
+
+func startPelicanServices(tc *PelicanTestContext) {
+	// Apply common resources
+	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, filepath.Join(tc.formattedKustomizeDir, "common"))
+
+	// Apply director; wait until it's up and ready. This blocks the other pieces.
+	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, filepath.Join(tc.formattedKustomizeDir, "director"))
+	time.Sleep(waitInitialDelay) // Give it time to start before we start polling.
+
+	tc.waitUntilDeploymentsReady([]string{"director"}, TWO_MINUTES)
+
+	// Apply registry; wait until it's up and ready. This blocks the cache and origin.
+	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, filepath.Join(tc.formattedKustomizeDir, "registry"))
+	time.Sleep(waitInitialDelay) // Give it time to start before we start polling.
+	tc.waitUntilDeploymentsReady([]string{"registry"}, TWO_MINUTES)
+
+	// Apply the rest.
+	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, tc.formattedKustomizeDir)
+	time.Sleep(waitInitialDelay) // Give it time to start before we start polling.
+
 }
 
 func cleanupPelicanTestSpace(setup *PelicanTestContext) {
@@ -117,16 +147,32 @@ func cleanupPelicanTestSpace(setup *PelicanTestContext) {
 
 func TestPelican(t *testing.T) {
 
+	// -----------------------
+	// Test environment setup
+	// -----------------------
+
 	testContext := setupPelicanTestSpace(t)
 
 	// --------------------------
 	// Test environment teardown
 	// --------------------------
 
-	// Cleanup runs all the reciporical functions that delete created resources
+	// Cleanup runs all the reciprocal functions that delete created resources
 	t.Cleanup(func() {
 		cleanupPelicanTestSpace(testContext)
 	})
+
+	// --------------------------------
+	// Test environment initialization
+	// --------------------------------
+
+	t.Run("Start pelican services", func(t *testing.T) {
+		startPelicanServices(testContext)
+	})
+
+	if t.Failed() {
+		return
+	}
 
 	// -------------
 	// Actual tests
@@ -134,7 +180,7 @@ func TestPelican(t *testing.T) {
 
 	// First test: Confirm that the kustomized resources pass their liveness/health checks
 	t.Run("Confirm deployments become ready.", func(t *testing.T) {
-		testContext.waitUntilAllDeploymentsReady(SIX_MINUTES)
+		testContext.waitUntilAllDeploymentsReady(TWO_MINUTES)
 	})
 
 	if t.Failed() {
