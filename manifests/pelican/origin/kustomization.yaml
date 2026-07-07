@@ -5,3 +5,11 @@ resources:
   - config.yaml
   - service.yaml
   - deployment.yaml
+
+configMapGenerator:
+  - name: origin-test-scripts
+    files:
+      - make_testfiles.sh
+
+generatorOptions:
+  disableNameSuffixHash: true
