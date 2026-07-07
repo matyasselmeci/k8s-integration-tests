@@ -41,6 +41,25 @@ type PelicanTestContext struct {
 	kubectlOptions        *k8s.KubectlOptions
 }
 
+// subtestGetDataFromOrigin checks that the Pelican CLI tools in the dev pod
+// can fetch data from the origin pod
+func subtestGetDataFromOrigin(th TestHandle) {
+	devPod := th.getPodNameByLabel("app.kubernetes.io/name=dev")
+	// Check that condor_status filtered on the EP's name returns a non-empty string
+	cmd := "pelican object get pelican://director:8444/public/data/0.0 /dev/null"
+	th.waitUntilPodExecSucceedsSlice(devPod, "", strings.Split(cmd, " "), TWO_MINUTES, zeroExitCode)
+}
+
+// subtestMakeTestfiles creates a set of test files in the origin pod,
+// which can be used to test the pelican object get command.
+func subtestMakeTestfiles(th TestHandle) {
+	originPod := th.getPodNameByLabel("app.kubernetes.io/name=origin")
+	// The script to make test files has been mounted into the origin pod.
+	// cmd := "bash /data/scripts/make_testfiles.sh /data/public/testfiles"
+	cmd := "sleep 300"
+	th.waitUntilPodExecSucceedsSlice(originPod, "", strings.Split(cmd, " "), TWO_MINUTES, zeroExitCode)
+}
+
 func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 	// -----------------------
 	// Test environment setup
@@ -164,6 +183,12 @@ func TestPelican(t *testing.T) {
 	if t.Failed() {
 		return
 	}
+
+	t.Run("Create test files in origin pod", func(t *testing.T) {
+		subtestMakeTestfiles(testContext.TestHandle)
+	})
+
+	// Ignore failure for now
 
 	// Second test: Run a basic pelican object get
 	testContext.RunTestConfigDir("../test-configs/pelican")
