@@ -23,7 +23,7 @@ type pelicanFormatArgs struct {
 }
 
 var defaultPelicanFormatArgs pelicanFormatArgs = pelicanFormatArgs{
-	Tag: "v7.22.0",
+	Tag: "v7.27.0-rc.2",
 }
 
 // waitInitialDelay is the amount of time to wait for a deployment to become
