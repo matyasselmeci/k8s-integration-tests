@@ -12,3 +12,4 @@ data:
       CachePresenceCapacity: 2000
     Server:
       Hostname: director
+      # Hostname: director:8444
