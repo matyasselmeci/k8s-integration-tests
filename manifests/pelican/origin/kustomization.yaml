@@ -4,12 +4,5 @@ kind: Kustomization
 resources:
   - config.yaml
   - service.yaml
+  - origin-test-scripts.yaml
   - deployment.yaml
-
-configMapGenerator:
-  - name: origin-test-scripts
-    files:
-      - make_testfiles.sh
-
-generatorOptions:
-  disableNameSuffixHash: true
