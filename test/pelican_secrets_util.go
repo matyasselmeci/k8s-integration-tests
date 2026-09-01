@@ -128,12 +128,20 @@ func generatePelicanTLSCerts() (pelicanTLSCerts, error) {
 	}, nil
 }
 
-// generatePelicanIssuerKeys shells out to the `pelican` CLI to create a
+// generatePelicanIssuerKeys shells out to the `pelican-server` CLI to create a
 // private/public key pair for each service, returning the PEM content of each
 // private key. The keys are written to a temporary directory and cleaned up
 // after reading.
+// Note: This runs on the host, not inside the cluster, so it requires
+// `pelican-server` to be installed and in PATH.
 func generatePelicanIssuerKeys(t *testing.T) (pelicanIssuerKeys, error) {
 	t.Helper()
+
+	cmd := exec.Command("command", "-v", "pelican-server")
+	if err := cmd.Run(); err != nil {
+		t.Logf("pelican-server CLI not found in PATH, required to generate issuer keys: %v", err)
+		return pelicanIssuerKeys{}, err
+	}
 
 	tmpDir, err := os.MkdirTemp("", "pelican-issuer-keys-*")
 	if err != nil {
@@ -148,13 +156,13 @@ func generatePelicanIssuerKeys(t *testing.T) (pelicanIssuerKeys, error) {
 		privKeyPath := filepath.Join(tmpDir, svc+".pem")
 		pubKeyPath := filepath.Join(tmpDir, svc+".jwks")
 
-		cmd := exec.Command("pelican", "key", "create",
+		cmd := exec.Command("pelican-server", "key", "create",
 			"--private-key", privKeyPath,
 			"--public-key", pubKeyPath,
 		)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			t.Logf("pelican key create output for %s: %s", svc, string(out))
+			t.Logf("pelican-server key create output for %s: %s", svc, string(out))
 			return pelicanIssuerKeys{}, err
 		}
 
