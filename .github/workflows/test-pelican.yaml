@@ -35,9 +35,9 @@ jobs:
         PELICAN_OriginTag: ${{ matrix.originVersion }}
         PELICAN_RegistryTag: ${{ matrix.registryVersion }}
         PELICAN_DirectorTag: ${{ matrix.directorVersion }}
-      setupScript: | 
+      setupScript: |
         VERSION="${{ matrix.clientVersion }}"
         VERSION="${VERSION#v}"
-        wget -O pelican.tgz "https://dl.pelicanplatform.org/${VERSION}/pelican-server_Linux_x86_64.tar.gz"
+        wget -nv -O pelican.tgz "https://dl.pelicanplatform.org/${VERSION}/pelican-server_Linux_x86_64.tar.gz"
         tar xf pelican.tgz
         sudo mv "pelican-server-$VERSION/pelican-server" /usr/bin/pelican
