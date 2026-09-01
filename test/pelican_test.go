@@ -3,7 +3,6 @@ package test
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -109,24 +108,18 @@ func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 }
 
 func startPelicanServices(tc *PelicanTestContext) {
-	// Apply common resources
-	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, filepath.Join(tc.formattedKustomizeDir, "common"))
-
-	// Apply director; wait until it's up and ready. This blocks the other pieces.
-	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, filepath.Join(tc.formattedKustomizeDir, "director"))
+	// Apply everything.
+	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, tc.formattedKustomizeDir)
+	// Wait for the director. It has to be up before the other pieces (they will wait for it).
 	time.Sleep(waitInitialDelay) // Give it time to start before we start polling.
-
 	tc.waitUntilDeploymentsReady([]string{"director"}, TWO_MINUTES)
-
-	// Apply registry; wait until it's up and ready. This blocks the cache and origin.
-	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, filepath.Join(tc.formattedKustomizeDir, "registry"))
+	// Wait for the registry. It has to be up before the cache and origin (they will wait for it).
 	time.Sleep(waitInitialDelay) // Give it time to start before we start polling.
 	tc.waitUntilDeploymentsReady([]string{"registry"}, TWO_MINUTES)
 
 	// Apply the rest.
-	k8s.KubectlApplyFromKustomize(tc.TestHandle.T, tc.kubectlOptions, tc.formattedKustomizeDir)
-	time.Sleep(waitInitialDelay) // Give it time to start before we start polling.
-
+	time.Sleep(waitInitialDelay) // Give the cache and origin some time to start before we start polling.
+	tc.waitUntilDeploymentsReady([]string{"cache", "origin"}, TWO_MINUTES)
 }
 
 func cleanupPelicanTestSpace(setup *PelicanTestContext) {
