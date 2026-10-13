@@ -45,7 +45,6 @@ type PelicanTestContext struct {
 // can fetch data from the origin pod
 func subtestGetDataFromOrigin(th TestHandle) {
 	devPod := th.getPodNameByLabel("app.kubernetes.io/name=dev")
-	// Check that condor_status filtered on the EP's name returns a non-empty string
 	cmd := "pelican object get pelican://director:8444/public/data/0.0 /dev/null"
 	th.waitUntilPodExecSucceedsSlice(devPod, "", strings.Split(cmd, " "), TWO_MINUTES, zeroExitCode)
 }
@@ -183,7 +182,18 @@ func TestPelican(t *testing.T) {
 	})
 
 	// Ignore failure for now
+	// if t.Failed() {
+	// 	return
+	// }
+
 
 	// Second test: Run a basic pelican object get
 	testContext.RunTestConfigDir("../test-configs/pelican")
+	t.Run("Get a test file from the origin pod", func(t *testing.T) {
+		subtestGetDataFromOrigin(testContext.TestHandle)
+	})
+
+	if t.Failed() {
+		return
+	}
 }
