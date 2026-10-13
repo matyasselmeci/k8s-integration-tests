@@ -55,8 +55,8 @@ func subtestGetDataFromOrigin(th TestHandle) {
 func subtestMakeTestfiles(th TestHandle) {
 	originPod := th.getPodNameByLabel("app.kubernetes.io/name=origin")
 	// The script to make test files has been mounted into the origin pod.
-	// cmd := "bash /data/scripts/make_testfiles.sh /data/public/testfiles"
-	cmd := "sleep 300"
+	cmd := "bash /data/scripts/make_testfiles.sh /data/public/testfiles"
+	// cmd := "sleep 300"
 	th.waitUntilPodExecSucceedsSlice(originPod, "", strings.Split(cmd, " "), TWO_MINUTES, zeroExitCode)
 }
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 Prefix=${1:-~/pelican-test-$(date +%F_%H.%M.%S)/testfiles}
 Min=0
-Max=31
+Max=7
 
 Blocksize=1000000
 NumBlocks=48
