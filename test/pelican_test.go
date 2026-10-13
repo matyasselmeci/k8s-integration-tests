@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +40,7 @@ type PelicanTestContext struct {
 	formattedKustomizeDir string
 	namespace             string
 	kubectlOptions        *k8s.KubectlOptions
+	originToken           string
 }
 
 func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
@@ -103,6 +105,47 @@ func startPelicanServices(tc *PelicanTestContext) {
 	tc.waitUntilDeploymentsReady([]string{"cache", "origin"}, TWO_MINUTES)
 }
 
+func createOriginToken(tc *PelicanTestContext) {
+	// kubectl -n osdf-dev exec deployment/pelicanplatform-osdf-pelican-origin -- osdf-server origin token create --audience "https://wlcg.cern.ch/jwt/v1/any" --issuer "https://pelicanplatform-origin.osdf-dev.chtc.io" --scope "storage.read:/ storage.modify:/ storage.create:/" --subject "anything" --lifetime 36000 > "${token_file}"
+
+	originPod := tc.getPodNameByLabel("app.kubernetes.io/name=origin")
+	command := []string{
+		"sh", "-c",
+		"pelican-server origin token create " +
+			"--audience https://wlcg.cern.ch/jwt/v1/any " +
+			"--issuer https://origin:8444 " +
+			"--scope 'storage.read:/ storage.modify:/ storage.create:/' " +
+			"--subject anything " +
+			"--lifetime 360 > /root/origin-token",
+	}
+	k8s.ExecPod(tc.T, tc.kubectlOptions, originPod, "origin", command...)
+
+	// Copy the created token from the origin pod to the dev pod using kubectl cp.
+	// It can't do a direct pod-to-pod copy, so copy it to a temporary file on
+	// local disk.
+	tempPath := tc.T.TempDir() + "/origin-token"
+
+	k8s.RunKubectl(tc.T, tc.kubectlOptions, "cp", originPod+":/root/origin-token", tempPath)
+
+	// Verify that the origin token looks like a token.
+	tokenRe := regexp.MustCompile(`^eyJ[A-Za-z0-9_-]+[.]eyJ[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$`)
+	data, err := os.ReadFile(tempPath)
+	if err != nil {
+		tc.T.Fatalf("Failed to read origin token from %s: %v", tempPath, err)
+	}
+	tokenStr := strings.TrimSpace(string(data))
+	tokenMatches := tokenRe.MatchString(tokenStr)
+	if !tokenMatches {
+		tc.T.Fatalf("Token from origin did not match expected format: %s", tokenStr)
+	}
+
+	// It looks like a token; copy it to the dev pod.
+	devPod := tc.getPodNameByLabel("app.kubernetes.io/name=dev")
+	k8s.RunKubectl(tc.T, tc.kubectlOptions, "cp", tempPath, devPod+":/root/origin-token")
+
+	k8s.ExecPod(tc.T, tc.kubectlOptions, devPod, "", "wc", "-c", "/root/origin-token")
+}
+
 func cleanupPelicanTestSpace(setup *PelicanTestContext) {
 	setup.dumpPodInformation(setup.logDir)
 	noCleanup := os.Getenv("TEST_PELICAN_NO_CLEANUP") // TODO replace with test stages (https://terratest.gruntwork.io/docs/testing-best-practices/iterating-locally-using-test-stages/, https://pkg.go.dev/github.com/gruntwork-io/terratest@v0.56.0/modules/test-structure)
@@ -153,6 +196,10 @@ func TestPelican(t *testing.T) {
 	// First test: Confirm that the kustomized resources pass their liveness/health checks
 	t.Run("Confirm deployments become ready.", func(t *testing.T) {
 		testContext.waitUntilAllDeploymentsReady(TWO_MINUTES)
+	})
+
+	t.Run("Create token for authenticated tests", func(t *testing.T) {
+		createOriginToken(testContext)
 	})
 
 	if t.Failed() {
