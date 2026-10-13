@@ -1,4 +1,14 @@
 tests:
+- name: Create test files in origin pod
+  podSelector:
+    labels:
+      app.kubernetes.io/name: origin
+  command: ["bash", "/data/scripts/make_testfiles.sh", "/data/public/testfiles"]
+  # Do not retry this
+  retry:
+    timeout: 1
+    wait: 10
+
 # Confirm that the Pelican CLI tools in the dev pod can fetch data from the origin
 - name: Confirm public `pelican object get` succeeds
   podSelector:
