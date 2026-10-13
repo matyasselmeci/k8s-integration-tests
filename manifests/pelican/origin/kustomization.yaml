@@ -4,5 +4,4 @@ kind: Kustomization
 resources:
   - config.yaml
   - service.yaml
-  - origin-test-scripts.yaml
   - deployment.yaml
