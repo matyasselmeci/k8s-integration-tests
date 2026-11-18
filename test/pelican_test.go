@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -22,8 +23,21 @@ type pelicanFormatArgs struct {
 	ClientTag   string
 }
 
+// pelicanClientImage is the tag prefix for the pelicanclient image built by
+// TestPelican into minikube (see buildMinikubeImage in test_runner_utils.go).
+const pelicanClientImage = "pelicanclient"
+
 var defaultPelicanFormatArgs pelicanFormatArgs = pelicanFormatArgs{
 	Tag: "v7.27.0",
+}
+
+// clientImageTag returns the version tag to use for the pelican-client image,
+// falling back to the default Pelican tag when no client-specific tag is set.
+func (args pelicanFormatArgs) clientImageTag() string {
+	if args.ClientTag != "" {
+		return args.ClientTag
+	}
+	return args.Tag
 }
 
 // waitInitialDelay is the amount of time to wait for a deployment to become
@@ -53,6 +67,18 @@ func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 	options := k8s.NewKubectlOptions("", "", namespace)
 	th := TestHandle{t, options}
 
+	// Populate the test params struct from the environment
+	th.fillTemplateStructFromEnv(&defaultPelicanFormatArgs, "PELICAN_")
+
+	// Build the pelican-client test-runner image into minikube. The manifests
+	// reference this image using the same tag.
+	clientTag := defaultPelicanFormatArgs.clientImageTag()
+	th.buildMinikubeImage("../images/pelican-client",
+		fmt.Sprintf("%v:%v", pelicanClientImage, clientTag),
+		map[string]string{
+			"VERSION": clientTag,
+		})
+
 	// Create a logging dir for the test output, fail fast if we can't make it
 	kustomizeDir := "../manifests/pelican"
 	logDir := th.makeLogDir(kustomizeDir)
@@ -74,7 +100,6 @@ func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 		"admin:$2y$10$ONeUS/VGwL9CoAD6pyZ2kusUjX8z0Sxuf8kz2g4PGbFb1GKUQ9J3C")
 
 	// Template the kustomize dirs
-	th.fillTemplateStructFromEnv(&defaultPelicanFormatArgs, "PELICAN_")
 	formattedKustomizeDir := th.formatKustomizeDir(kustomizeDir, defaultPelicanFormatArgs)
 
 	testContext := &PelicanTestContext{
