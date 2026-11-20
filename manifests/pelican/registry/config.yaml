@@ -7,6 +7,8 @@ data:
   50-registry.yaml: |
     ---
     Registry:
+      RequireOriginApproval: false
+      RequireCacheApproval: false
       
     Server:
       Hostname: registry
