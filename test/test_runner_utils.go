@@ -12,10 +12,11 @@ func (th *TestHandle) buildMinikubeImage(dockerDir string, tag string, buildArgs
 	th.T.Helper()
 	args := []string{"image", "build", "-t", tag}
 	for k, v := range buildArgs {
-		args = append(args, "--build-opt", fmt.Sprintf("opt=build-arg:%s=%s", k, v))
+		args = append(args, "--build-opt", fmt.Sprintf("build-arg=%s=%s", k, v))
 	}
 	args = append(args, dockerDir)
 
+	th.T.Logf("Running minikube %v\n", args)
 	cmd := exec.Command("minikube", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
