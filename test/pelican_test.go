@@ -26,7 +26,7 @@ type pelicanFormatArgs struct {
 }
 
 var defaultPelicanFormatArgs pelicanFormatArgs = pelicanFormatArgs{
-	Tag: "v7.27.0",
+	Tag: "v26.0.2",
 }
 
 // pelicanClientImage is the tag prefix for the alpine-based client test image
