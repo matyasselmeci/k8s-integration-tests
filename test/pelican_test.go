@@ -175,9 +175,9 @@ func createOriginToken(tc *PelicanTestContext) {
 
 	// It looks like a token; copy it to the dev pod.
 	devPod := tc.getPodNameByLabel("app.kubernetes.io/name=dev")
-	k8s.RunKubectl(tc.T, tc.kubectlOptions, "cp", tempPath, devPod+":/root/origin-token")
+	k8s.RunKubectl(tc.T, tc.kubectlOptions, "cp", tempPath, devPod+":/home/pelican/origin-token")
 
-	k8s.ExecPod(tc.T, tc.kubectlOptions, devPod, "", "wc", "-c", "/root/origin-token")
+	k8s.ExecPod(tc.T, tc.kubectlOptions, devPod, "", "wc", "-c", "/home/pelican/origin-token")
 }
 
 func cleanupPelicanTestSpace(setup *PelicanTestContext) {
