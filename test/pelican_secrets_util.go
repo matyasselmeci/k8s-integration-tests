@@ -7,10 +7,10 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gruntwork-io/terratest/modules/k8s"
+	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/masterminds/sprig"
 )
 
@@ -128,47 +129,67 @@ func generatePelicanTLSCerts() (pelicanTLSCerts, error) {
 	}, nil
 }
 
-// generatePelicanIssuerKeys shells out to the `pelican-server` CLI to create a
-// private/public key pair for each service, returning the PEM content of each
-// private key. The keys are written to a temporary directory and cleaned up
-// after reading.
-// Note: This runs on the host, not inside the cluster, so it requires
-// `pelican-server` to be installed and in PATH.
-func generatePelicanIssuerKeys(t *testing.T) (pelicanIssuerKeys, error) {
+// generatePelicanIssuerKeys creates the service signing keys in a temporary pod
+// using the same registry image version as the services under test.
+func generatePelicanIssuerKeys(t *testing.T, options *k8s.KubectlOptions, serverImage string) (keys pelicanIssuerKeys, retErr error) {
 	t.Helper()
-
-	cmd := exec.Command("command", "-v", "pelican-server")
-	if err := cmd.Run(); err != nil {
-		t.Logf("pelican-server CLI not found in PATH, required to generate issuer keys: %v", err)
-		return pelicanIssuerKeys{}, err
-	}
 
 	tmpDir, err := os.MkdirTemp("", "pelican-issuer-keys-*")
 	if err != nil {
-		return pelicanIssuerKeys{}, err
+		return pelicanIssuerKeys{}, fmt.Errorf("create temporary key directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
+
+	podName := "pelican-keygen-" + strings.ToLower(random.UniqueId())
+	defer func() {
+		if err := k8s.RunKubectlE(t, options, "delete", "pod", podName, "--ignore-not-found=true", "--wait=true"); err != nil {
+			cleanupErr := fmt.Errorf("delete temporary Pelican key-generation pod %s: %w", podName, err)
+			if retErr == nil {
+				retErr = cleanupErr
+			} else {
+				t.Logf("Failed to clean up temporary Pelican key-generation pod: %v", cleanupErr)
+			}
+		}
+	}()
+
+	if err := k8s.RunKubectlE(t, options, "run", podName,
+		"--image="+serverImage,
+		"--restart=Never",
+		"--command", "--", "sleep", "infinity",
+	); err != nil {
+		return pelicanIssuerKeys{}, fmt.Errorf("start Pelican key-generation pod using %s: %w", serverImage, err)
+	}
+	if err := k8s.RunKubectlE(t, options, "wait", "--for=condition=Ready", "pod/"+podName, "--timeout=2m"); err != nil {
+		return pelicanIssuerKeys{}, fmt.Errorf("wait for Pelican key-generation pod %s: %w", podName, err)
+	}
+
+	containerKeyDir := "/tmp/pelican-issuer-keys"
+	if _, err := k8s.ExecPodE(t, options, podName, "", "mkdir", "-p", containerKeyDir); err != nil {
+		return pelicanIssuerKeys{}, fmt.Errorf("create key directory in pod %s: %w", podName, err)
+	}
 
 	services := []string{"director", "registry", "origin", "cache"}
 	pemContents := make(map[string]string, len(services))
 
 	for _, svc := range services {
 		privKeyPath := filepath.Join(tmpDir, svc+".pem")
-		pubKeyPath := filepath.Join(tmpDir, svc+".jwks")
-
-		cmd := exec.Command("pelican-server", "key", "create",
-			"--private-key", privKeyPath,
-			"--public-key", pubKeyPath,
+		containerPrivKeyPath := filepath.Join(containerKeyDir, svc+".pem")
+		containerPubKeyPath := filepath.Join(containerKeyDir, svc+".jwks")
+		out, err := k8s.ExecPodE(t, options, podName, "",
+			"pelican-server", "key", "create",
+			"--private-key", containerPrivKeyPath,
+			"--public-key", containerPubKeyPath,
 		)
-		out, err := cmd.CombinedOutput()
 		if err != nil {
-			t.Logf("pelican-server key create output for %s: %s", svc, string(out))
-			return pelicanIssuerKeys{}, err
+			return pelicanIssuerKeys{}, fmt.Errorf("create issuer key for %s in pod %s: %w (output: %s)", svc, podName, err, out)
 		}
 
+		if err := k8s.RunKubectlE(t, options, "cp", podName+":"+containerPrivKeyPath, privKeyPath); err != nil {
+			return pelicanIssuerKeys{}, fmt.Errorf("copy issuer key for %s from pod %s: %w", svc, podName, err)
+		}
 		data, err := os.ReadFile(privKeyPath)
 		if err != nil {
-			return pelicanIssuerKeys{}, err
+			return pelicanIssuerKeys{}, fmt.Errorf("read issuer key for %s: %w", svc, err)
 		}
 		pemContents[svc] = string(data)
 	}
@@ -205,7 +226,7 @@ func applySprigTemplate(t *testing.T, templatePath string, data any, funcMap tem
 // oidcClientId and oidcClientSecret may be empty strings if OIDC is not
 // required by the test. serverWebPasswd may also be empty to use Pelican's
 // default password behaviour.
-func (th *TestHandle) applyPelicanSecrets(oidcClientId, oidcClientSecret, serverWebPasswd string) string {
+func (th *TestHandle) applyPelicanSecrets(oidcClientId, oidcClientSecret, serverWebPasswd, serverImage string) string {
 	th.T.Helper()
 
 	certs, err := generatePelicanTLSCerts()
@@ -213,7 +234,7 @@ func (th *TestHandle) applyPelicanSecrets(oidcClientId, oidcClientSecret, server
 		th.T.Fatalf("Failed to generate Pelican TLS certs: %v", err)
 	}
 
-	keys, err := generatePelicanIssuerKeys(th.T)
+	keys, err := generatePelicanIssuerKeys(th.T, th.options, serverImage)
 	if err != nil {
 		th.T.Fatalf("Failed to generate Pelican issuer keys: %v", err)
 	}

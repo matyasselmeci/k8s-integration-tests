@@ -12,6 +12,7 @@ Each test suite creates a randomly-named namespace, applies a Kustomize manifest
 - A running [minikube](https://minikube.sigs.k8s.io/docs/start/)-based Kubernetes cluster accessible via `kubectl`
   - The test harness depends on several minikube-specific features, other single-node cluster tools like Kind are incompatible
 - `kubectl` installed and configured (`~/.kube/config` pointing at your cluster)
+- The Pelican server CLI does not need to be installed on the host; Pelican issuer keys are generated in a version-matched container.
 
 ---
 

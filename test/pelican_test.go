@@ -77,7 +77,13 @@ func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 		fmt.Sprintf("%v:%v", pelicanClientImage, clientTag),
 		map[string]string{
 			"PELICAN_CLIENT_IMAGE": fmt.Sprintf("hub.osg-htc.org/%v/client:%v", pelicanOrgForTag(clientTag), clientTag),
+
 		})
+
+	// Get an image with pelican-server in it for key generation.
+	// Reuse the registry image since we're already pulling it for the tests.
+	registryTag := cmp.Or(defaultPelicanFormatArgs.RegistryTag, defaultPelicanFormatArgs.Tag)
+	serverImage := fmt.Sprintf("hub.osg-htc.org/%v/registry:%v", pelicanOrgForTag(registryTag), registryTag)
 
 	// Create a logging dir for the test output, fail fast if we can't make it
 	kustomizeDir := "../manifests/pelican"
@@ -97,7 +103,8 @@ func setupPelicanTestSpace(t *testing.T) *PelicanTestContext {
 		"Placeholder for the registry.",
 		"Placeholder for the registry.",
 		// Generated using `htpasswd -nbB -C 10 admin asdf`.
-		"admin:$2y$10$ONeUS/VGwL9CoAD6pyZ2kusUjX8z0Sxuf8kz2g4PGbFb1GKUQ9J3C")
+		"admin:$2y$10$ONeUS/VGwL9CoAD6pyZ2kusUjX8z0Sxuf8kz2g4PGbFb1GKUQ9J3C",
+		serverImage)
 
 	// Template the kustomize dir
 	funcMap := template.FuncMap{"orgForTag": pelicanOrgForTag}
